@@ -5464,6 +5464,7 @@ function sanitizeChatConversationForStorage(conversation = {}) {
     id,
     title: String(conversation.title || "Chat Session").slice(0, 160),
     model: String(conversation.model || ""),
+    folderId: conversation.folderId || null,
     messages,
     timestamp,
     createdAt: conversation.createdAt || new Date(timestamp).toISOString(),

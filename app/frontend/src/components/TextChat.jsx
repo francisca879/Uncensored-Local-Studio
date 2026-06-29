@@ -9,6 +9,14 @@ import {
   stopLlm,
 } from "../services/api";
 
+const PROMPT_PRESETS = [
+  { id: "assistant", name: "Default Assistant", prompt: "You are a helpful local AI assistant." },
+  { id: "coder", name: "Senior Developer", prompt: "You are an expert senior software engineer and computer science tutor. Write clean, well-commented, modular, and optimized code." },
+  { id: "writer", name: "Creative Writer", prompt: "You are a creative writer and storyteller. Craft engaging, rich, descriptive narrative prose and dialogue." },
+  { id: "scambaiter", name: "Scammer Baiter", prompt: "You are chatting with a hacker or scammer who has compromised a WhatsApp account. Your goal is to keep them engaged, distracted, and wasting their time for as long as possible. Be extremely cooperative, slightly panicked, helpful, but very slow, confused, and technically challenged. Use Hinglish (Roman Hindi) naturally (e.g., 'bhai', 'yaar', 'ruko', 'haan'). Pretend you are eager to send money but create fake hurdles (e.g. UPI limits, network failure, GPay errors)." },
+  { id: "analyst", name: "Research Analyst", prompt: "You are a scientific researcher. Provide dense, factual, citation-ready analysis." }
+];
+
 const processMessageContent = (rawText, apiReasoning = "", enableThinking = true) => {
   if (typeof rawText !== "string") {
     return { content: rawText, reasoning: apiReasoning || "" };
@@ -142,6 +150,7 @@ function TextChat({
     completion_tokens: 0,
     total_tokens: 0
   });
+  const [showChatConfig, setShowChatConfig] = useState(false);
 
   useEffect(() => {
     if (setIsLlmLoaded) {
@@ -968,12 +977,30 @@ function TextChat({
 
             <button
               className="m3-btn m3-btn-outlined"
-              style={{ height: "32px", padding: "0 10px", display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", borderRadius: "var(--md-shape-corner-medium)" }}
+              style={{ height: "32px", padding: "0 10px", display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", borderRadius: "var(--md-shape-corner-medium)", marginRight: "4px" }}
               onClick={handleClearChat}
               disabled={messages.length === 0}
             >
               <Trash2 size={14} />
               <span>Clear</span>
+            </button>
+
+            <button
+              className="m3-btn m3-btn-outlined"
+              style={{
+                height: "32px",
+                padding: "0 10px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "0.78rem",
+                borderRadius: "var(--md-shape-corner-medium)",
+                background: showChatConfig ? "var(--md-sys-color-primary-container)" : "transparent",
+                color: showChatConfig ? "var(--md-sys-color-on-primary-container)" : "inherit"
+              }}
+              onClick={() => setShowChatConfig(!showChatConfig)}
+            >
+              <span>⚙️ Config</span>
             </button>
           </div>
         </div>
@@ -1266,6 +1293,188 @@ function TextChat({
           <div className="chat-composer-hint">Enter to send &nbsp;·&nbsp; Shift+Enter for new line</div>
         </div>
       </section>
+
+      {showChatConfig && (
+        <section
+          className="text-chat-config-panel"
+          style={{
+            width: "320px",
+            borderLeft: "1px solid var(--border-color)",
+            background: "var(--md-sys-color-surface)",
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+            flexShrink: 0,
+            overflowY: "auto",
+            padding: "16px",
+            boxSizing: "border-box",
+            gap: "16px"
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h3 style={{ fontSize: "1rem", fontWeight: 700, margin: 0 }}>Chat Settings</h3>
+            <button
+              onClick={() => setShowChatConfig(false)}
+              style={{ background: "none", border: "none", color: "var(--md-sys-color-outline)", cursor: "pointer" }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--md-sys-color-outline)" }}>System Prompt Preset</label>
+            <select
+              style={{
+                width: "100%",
+                padding: "8px",
+                borderRadius: "var(--md-shape-corner-medium)",
+                border: "1px solid var(--border-color)",
+                background: "var(--md-sys-color-surface-variant)",
+                color: "var(--md-sys-color-on-surface)",
+                fontSize: "0.82rem",
+                cursor: "pointer",
+                outline: "none"
+              }}
+              onChange={(e) => {
+                const selected = PROMPT_PRESETS.find(p => p.id === e.target.value);
+                if (selected) {
+                  setTextSettings(prev => ({ ...prev, systemPrompt: selected.prompt }));
+                }
+              }}
+              defaultValue="custom"
+            >
+              <option value="custom">-- Select Preset --</option>
+              {PROMPT_PRESETS.map(preset => (
+                <option key={preset.id} value={preset.id}>{preset.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--md-sys-color-outline)" }}>System Instructions</label>
+            <textarea
+              value={textSettings?.systemPrompt || ""}
+              onChange={(e) => {
+                setTextSettings(prev => ({ ...prev, systemPrompt: e.target.value }));
+              }}
+              style={{
+                width: "100%",
+                height: "120px",
+                padding: "8px 10px",
+                borderRadius: "var(--md-shape-corner-medium)",
+                border: "1px solid var(--border-color)",
+                background: "var(--md-sys-color-surface-variant)",
+                color: "var(--md-sys-color-on-surface)",
+                fontSize: "0.82rem",
+                resize: "vertical",
+                lineHeight: 1.4,
+                outline: "none"
+              }}
+              placeholder="System prompt rules..."
+            />
+          </div>
+
+          <hr style={{ border: "none", borderTop: "1px solid var(--border-color)", margin: "4px 0" }} />
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", marginBottom: "4px" }}>
+                <span style={{ fontWeight: 600, color: "var(--md-sys-color-outline)" }}>Temperature</span>
+                <span style={{ fontWeight: 700 }}>{textSettings?.temperature ?? 0.7}</span>
+              </div>
+              <input
+                type="range"
+                min="0.1"
+                max="1.5"
+                step="0.05"
+                value={textSettings?.temperature ?? 0.7}
+                onChange={(e) => setTextSettings(prev => ({ ...prev, temperature: parseFloat(e.target.value) }))}
+                style={{ width: "100%" }}
+              />
+              <div style={{ fontSize: "0.68rem", color: "var(--md-sys-color-outline-variant)" }}>
+                Lower is focused; higher is creative.
+              </div>
+            </div>
+
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", marginBottom: "4px" }}>
+                <span style={{ fontWeight: 600, color: "var(--md-sys-color-outline)" }}>Top P</span>
+                <span style={{ fontWeight: 700 }}>{textSettings?.topP ?? 0.95}</span>
+              </div>
+              <input
+                type="range"
+                min="0.05"
+                max="1.0"
+                step="0.05"
+                value={textSettings?.topP ?? 0.95}
+                onChange={(e) => setTextSettings(prev => ({ ...prev, topP: parseFloat(e.target.value) }))}
+                style={{ width: "100%" }}
+              />
+            </div>
+
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", marginBottom: "4px" }}>
+                <span style={{ fontWeight: 600, color: "var(--md-sys-color-outline)" }}>Repeat Penalty</span>
+                <span style={{ fontWeight: 700 }}>{textSettings?.repeatPenalty ?? 1.1}</span>
+              </div>
+              <input
+                type="range"
+                min="1.0"
+                max="2.0"
+                step="0.05"
+                value={textSettings?.repeatPenalty ?? 1.1}
+                onChange={(e) => setTextSettings(prev => ({ ...prev, repeatPenalty: parseFloat(e.target.value) }))}
+                style={{ width: "100%" }}
+              />
+            </div>
+
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", marginBottom: "4px" }}>
+                <span style={{ fontWeight: 600, color: "var(--md-sys-color-outline)" }}>Max Response Tokens</span>
+                <span style={{ fontWeight: 700 }}>{textSettings?.maxTokens ?? 1024}</span>
+              </div>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <select
+                  value={textSettings?.responseTokenMode || "auto"}
+                  onChange={(e) => setTextSettings(prev => ({ ...prev, responseTokenMode: e.target.value }))}
+                  style={{
+                    padding: "6px",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border-color)",
+                    background: "var(--md-sys-color-surface-variant)",
+                    color: "var(--md-sys-color-on-surface)",
+                    fontSize: "0.75rem",
+                    outline: "none"
+                  }}
+                >
+                  <option value="auto">Auto</option>
+                  <option value="manual">Manual</option>
+                </select>
+                {textSettings?.responseTokenMode === "manual" && (
+                  <input
+                    type="number"
+                    min="64"
+                    max="8192"
+                    step="64"
+                    value={textSettings?.maxTokens ?? 1024}
+                    onChange={(e) => setTextSettings(prev => ({ ...prev, maxTokens: parseInt(e.target.value) || 1024 }))}
+                    style={{
+                      flex: 1,
+                      padding: "5px",
+                      borderRadius: "6px",
+                      border: "1px solid var(--border-color)",
+                      background: "var(--md-sys-color-surface-variant)",
+                      color: "var(--md-sys-color-on-surface)",
+                      fontSize: "0.78rem",
+                      outline: "none"
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

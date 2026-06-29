@@ -20,6 +20,12 @@ function Sidebar({
   showHistory,
   setShowHistory,
   onDeleteConversation,
+  folders = [],
+  addFolder,
+  deleteFolder,
+  renameFolder,
+  toggleFolderCollapse,
+  setConversationFolder,
   speechTranscriptions = [],
   selectedSpeechTranscript,
   setSelectedSpeechTranscript,
@@ -33,6 +39,100 @@ function Sidebar({
   setShowTtsHistory,
   onDeleteTtsOutput
 }) {
+  const handleAddFolderClick = (e) => {
+    e.stopPropagation();
+    const name = window.prompt("Enter folder name:");
+    if (name && name.trim()) {
+      addFolder(name.trim());
+    }
+  };
+
+  const renderConversationItem = (conv) => {
+    const isActive = activeConversationId === conv.id;
+    return (
+      <div
+        key={conv.id}
+        onClick={() => {
+          setActiveConversationId(conv.id);
+          setActiveTab("chat");
+        }}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "6px 8px 6px 10px",
+          borderRadius: "var(--md-shape-corner-small)",
+          fontSize: "0.78rem",
+          cursor: "pointer",
+          background: isActive ? "var(--md-sys-color-secondary-container)" : "transparent",
+          color: isActive ? "var(--md-sys-color-on-secondary-container)" : "var(--md-sys-color-on-surface-variant)",
+          border: isActive ? "1px solid var(--md-sys-color-outline-variant)" : "1px solid transparent",
+          transition: "background 0.2s"
+        }}
+        className="sidebar-history-item"
+        title={conv.title}
+      >
+        <span style={{
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          flex: 1,
+          fontWeight: isActive ? 600 : 400
+        }}>
+          {conv.title}
+        </span>
+
+        <select
+          value={conv.folderId || ""}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => {
+            setConversationFolder(conv.id, e.target.value || null);
+          }}
+          style={{
+            background: "transparent",
+            border: "none",
+            color: "var(--md-sys-color-outline)",
+            fontSize: "0.68rem",
+            cursor: "pointer",
+            marginRight: "4px",
+            maxWidth: "60px",
+            outline: "none"
+          }}
+          title="Move to Folder"
+        >
+          <option value="" style={{ background: "var(--md-sys-color-surface)" }}>Move...</option>
+          {folders.map(f => (
+            <option key={f.id} value={f.id} style={{ background: "var(--md-sys-color-surface)" }}>{f.name}</option>
+          ))}
+          {conv.folderId && (
+            <option value="" style={{ background: "var(--md-sys-color-surface)" }}>Remove</option>
+          )}
+        </select>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDeleteConversation(conv.id, e);
+          }}
+          style={{
+            background: "none",
+            border: "none",
+            color: "var(--md-sys-color-outline)",
+            cursor: "pointer",
+            padding: "2px",
+            marginLeft: "6px",
+            display: "flex",
+            alignItems: "center"
+          }}
+          className="sidebar-history-delete"
+          title="Delete Conversation"
+        >
+          <Trash2 size={12} />
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div className={`sidebar ${collapsed ? "collapsed" : ""}`}>
       <div>
@@ -96,75 +196,124 @@ function Sidebar({
                   marginBottom: "6px",
                   display: "flex", 
                   flexDirection: "column", 
-                  gap: "4px", 
-                  maxHeight: "220px", 
+                  gap: "6px", 
+                  maxHeight: "350px", 
                   overflowY: "auto",
                   borderLeft: "2px solid var(--border-color)"
                 }}
               >
-                {conversations.length === 0 ? (
-                  <div style={{ padding: "8px 12px", fontSize: "0.78rem", color: "var(--md-sys-color-outline)", opacity: 0.8 }}>
-                    No saved chats
-                  </div>
-                ) : (
-                  conversations.map((conv) => {
-                    const isActive = activeConversationId === conv.id;
-                    return (
+                {/* Create Folder Header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 8px" }}>
+                  <span style={{ fontSize: "0.72rem", fontWeight: 600, color: "var(--md-sys-color-outline)" }}>Folders & Chats</span>
+                  <button
+                    onClick={handleAddFolderClick}
+                    style={{
+                      background: "var(--md-sys-color-primary-container)",
+                      border: "none",
+                      color: "var(--md-sys-color-primary)",
+                      borderRadius: "4px",
+                      padding: "2px 6px",
+                      fontSize: "0.68rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px"
+                    }}
+                  >
+                    + Folder
+                  </button>
+                </div>
+
+                {/* Render Folders */}
+                {folders.map((folder) => {
+                  const folderConversations = conversations.filter(c => c.folderId === folder.id);
+                  const isExpanded = folder.expanded !== false;
+                  return (
+                    <div key={folder.id} style={{ display: "flex", flexDirection: "column", gap: "2px", margin: "2px 0" }}>
                       <div
-                        key={conv.id}
-                        onClick={() => {
-                          setActiveConversationId(conv.id);
-                          setActiveTab("chat");
-                        }}
                         style={{
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "space-between",
-                          padding: "6px 8px 6px 10px",
-                          borderRadius: "var(--md-shape-corner-small)",
-                          fontSize: "0.78rem",
+                          padding: "4px 6px",
+                          borderRadius: "4px",
+                          background: "var(--md-sys-color-surface-variant)",
                           cursor: "pointer",
-                          background: isActive ? "var(--md-sys-color-secondary-container)" : "transparent",
-                          color: isActive ? "var(--md-sys-color-on-secondary-container)" : "var(--md-sys-color-on-surface-variant)",
-                          border: isActive ? "1px solid var(--md-sys-color-outline-variant)" : "1px solid transparent",
-                          transition: "background 0.2s"
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          color: "var(--md-sys-color-on-surface-variant)"
                         }}
-                        className="sidebar-history-item"
-                        title={conv.title}
+                        onClick={() => toggleFolderCollapse(folder.id)}
                       >
-                        <span style={{
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          flex: 1,
-                          fontWeight: isActive ? 600 : 400
-                        }}>
-                          {conv.title}
-                        </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteConversation(conv.id, e);
-                          }}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            color: "var(--md-sys-color-outline)",
-                            cursor: "pointer",
-                            padding: "2px",
-                            marginLeft: "6px",
-                            display: "flex",
-                            alignItems: "center"
-                          }}
-                          className="sidebar-history-delete"
-                          title="Delete Conversation"
-                        >
-                          <Trash2 size={12} />
-                        </button>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
+                          <span style={{ fontSize: "0.75rem" }}>{isExpanded ? "📂" : "📁"}</span>
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{folder.name}</span>
+                          <span style={{ fontSize: "0.7rem", opacity: 0.6 }}>({folderConversations.length})</span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const newName = window.prompt("Rename folder to:", folder.name);
+                              if (newName && newName.trim()) renameFolder(folder.id, newName.trim());
+                            }}
+                            style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", fontSize: "0.65rem", opacity: 0.7 }}
+                            title="Rename"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(`Delete folder "${folder.name}"? Chats will be preserved.`)) {
+                                deleteFolder(folder.id);
+                              }
+                            }}
+                            style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", fontSize: "0.65rem", opacity: 0.7 }}
+                            title="Delete Folder"
+                          >
+                            ❌
+                          </button>
+                        </div>
                       </div>
-                    );
-                  })
-                )}
+                      
+                      {isExpanded && (
+                        <div style={{ paddingLeft: "10px", display: "flex", flexDirection: "column", gap: "2px", borderLeft: "1px dashed var(--border-color)" }}>
+                          {folderConversations.length === 0 ? (
+                            <div style={{ padding: "4px 8px", fontSize: "0.7rem", color: "var(--md-sys-color-outline)", opacity: 0.7 }}>
+                              Empty folder
+                            </div>
+                          ) : (
+                            folderConversations.map(conv => renderConversationItem(conv))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Render Uncategorized Chats */}
+                <div style={{ marginTop: "4px" }}>
+                  {folders.length > 0 && (
+                    <div style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--md-sys-color-outline)", padding: "4px 8px", opacity: 0.8 }}>
+                      Uncategorized Chats
+                    </div>
+                  )}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                    {conversations.filter(c => !c.folderId || !folders.some(f => f.id === c.folderId)).length === 0 ? (
+                      folders.length > 0 ? null : (
+                        <div style={{ padding: "8px 12px", fontSize: "0.78rem", color: "var(--md-sys-color-outline)", opacity: 0.8 }}>
+                          No saved chats
+                        </div>
+                      )
+                    ) : (
+                      conversations
+                        .filter(c => !c.folderId || !folders.some(f => f.id === c.folderId))
+                        .map(conv => renderConversationItem(conv))
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>

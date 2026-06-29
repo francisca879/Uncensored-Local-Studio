@@ -1,0 +1,10 @@
+{
+  "name": "uncensored-local-studio",
+  "version": "1.0.0",
+  "description": "Uncensored AI Studio",
+  "scripts": {
+    "setup": "bash scripts/setup/setup.sh",
+    "build": "bash scripts/setup/setup.sh && cd app/frontend && npm install && npm run build",
+    "start": "node scripts/server/serve.cjs"
+  }
+}

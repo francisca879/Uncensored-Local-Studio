@@ -35,6 +35,15 @@ const GalleryItem = memo(({ img, idx, isSelected, onClick }) => {
   );
 });
 
+const STYLE_FILTERS = [
+  { id: "none", name: "None", suffix: "" },
+  { id: "cyberpunk", name: "Cyberpunk", suffix: ", cyberpunk style, neon lights, high-tech, dark gritty alley, reflections, detailed" },
+  { id: "anime", name: "Anime", suffix: ", anime style, vibrant colors, detailed line art, studio ghibli style, masterpiece" },
+  { id: "photorealistic", name: "Photorealistic", suffix: ", photorealistic, highly detailed, 8k resolution, professional photography, dramatic lighting, sharp focus" },
+  { id: "render", name: "3D Render", suffix: ", octane render, unreal engine 5, 3d model, Pixar style, vivid colors" },
+  { id: "vaporwave", name: "Vaporwave", suffix: ", vaporwave aesthetic, pastel pink and blue, retro-futuristic, wireframe, glitch art, 80s style" }
+];
+
 function Generator({
   prompt,
   setPrompt,
@@ -75,6 +84,29 @@ function Generator({
   const timerRef = useRef(null);
   const abortControllerRef = useRef(null);
   const hasRealGenerationStepRef = useRef(false);
+
+  const [aspectRatio, setAspectRatio] = useState("1:1");
+  const [useHighRes, setUseHighRes] = useState(true);
+  const [selectedStyle, setSelectedStyle] = useState("none");
+  const [batchCount, setBatchCount] = useState(1);
+  const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
+
+  const applyAspectRatio = (ratio, highRes) => {
+    setAspectRatio(ratio);
+    let w = 1024, h = 1024;
+    if (highRes) {
+      if (ratio === "1:1") { w = 1024; h = 1024; }
+      else if (ratio === "9:16") { w = 768; h = 1344; }
+      else if (ratio === "16:9") { w = 1344; h = 768; }
+      else if (ratio === "21:9") { w = 1536; h = 640; }
+    } else {
+      if (ratio === "1:1") { w = 512; h = 512; }
+      else if (ratio === "9:16") { w = 512; h = 768; }
+      else if (ratio === "16:9") { w = 768; h = 512; }
+      else if (ratio === "21:9") { w = 768; h = 384; }
+    }
+    setConstraints(prev => ({ ...prev, width: w, height: h }));
+  };
 
   const handleEnhancePrompt = async () => {
     if (!prompt.trim() || isEnhancing || isGenerating) return;
@@ -255,240 +287,260 @@ function Generator({
     setIsRestartingBackend(false);
     setRestartLoadProgress(null);
 
-    if (timerRef.current) clearInterval(timerRef.current);
     setIsGenerating(true);
-    setGenerationProgress(0);
-    setElapsedTime(0);
-    setCurrentStep(0);
-    setGenerationSpeed("");
-    hasRealGenerationStepRef.current = false;
-    setIsCpuFallback(false);
-    setIsDecoding(false);
-    setGenDuration(null);
-    setOutputImage(null);
-
-    // Calculate dynamic step estimation times
-    // CPU takes ~35s per step at 512px, ~140s at 1024px. GPU is ~0.04x of CPU time.
-    const baseGpuStepTime = (constraints.width >= 1024 ? 140 : 35) * 0.04;
-    const baseCpuStepTime = (constraints.width >= 1024 ? 140 : 35);
     
-    const gpuSelected = (constraints.backendType || (constraints.useGpu === false ? "cpu" : "auto")) !== "cpu";
-    let activeStepTime = gpuSelected ? baseGpuStepTime : baseCpuStepTime;
-    let cpuFallbackDetected = false;
-    let fallbackTime = 0;
-    let fallbackProgress = 0;
-    let elapsedSeconds = 0;
+    const count = batchCount;
+    for (let i = 0; i < count; i++) {
+      if (i > 0) {
+        if (!isGenerating || (abortControllerRef.current && abortControllerRef.current.signal.aborted)) {
+          break;
+        }
+      }
+      
+      setCurrentBatchIndex(i);
+      if (timerRef.current) clearInterval(timerRef.current);
+      setGenerationProgress(0);
+      setElapsedTime(0);
+      setCurrentStep(0);
+      setGenerationSpeed("");
+      hasRealGenerationStepRef.current = false;
+      setIsCpuFallback(false);
+      setIsDecoding(false);
+      setGenDuration(null);
+      setOutputImage(null);
 
-    setEstimatedLeftTime(Math.round(constraints.steps * activeStepTime));
+      // Calculate dynamic step estimation times
+      const baseGpuStepTime = (constraints.width >= 1024 ? 140 : 35) * 0.04;
+      const baseCpuStepTime = (constraints.width >= 1024 ? 140 : 35);
+      
+      const gpuSelected = (constraints.backendType || (constraints.useGpu === false ? "cpu" : "auto")) !== "cpu";
+      let activeStepTime = gpuSelected ? baseGpuStepTime : baseCpuStepTime;
+      let cpuFallbackDetected = false;
+      let fallbackTime = 0;
+      let fallbackProgress = 0;
+      let elapsedSeconds = 0;
 
-    timerRef.current = setInterval(async () => {
-      elapsedSeconds++;
-      setElapsedTime(elapsedSeconds);
+      setEstimatedLeftTime(Math.round(constraints.steps * activeStepTime));
 
-      try {
-        const progress = await getGenerationProgress();
-        if (progress && progress.active) {
-          const decoding = progress.decoding || false;
-          setIsDecoding(decoding);
+      timerRef.current = setInterval(async () => {
+        elapsedSeconds++;
+        setElapsedTime(elapsedSeconds);
 
-          const step = decoding ? (progress.steps || constraints.steps || 20) : (progress.step || 0);
-          const steps = progress.steps || constraints.steps || 20;
-          const speed = decoding ? "" : (progress.speed || "");
-          const numericSpeed = parseFloat(speed);
-          const backendMode = String(progress.backendMode || "").toLowerCase();
-          const backendDevice = String(progress.backendDevice || "").toLowerCase();
-          const isConfirmedGpuBackend = (
-            backendMode.includes("gpu") ||
-            backendMode.includes("vulkan") ||
-            backendMode.includes("cuda") ||
-            backendMode.includes("rocm") ||
-            backendMode.includes("metal") ||
-            backendDevice.includes("vulkan") ||
-            backendDevice.includes("cuda") ||
-            backendDevice.includes("rocm")
-          );
+        try {
+          const progress = await getGenerationProgress();
+          if (progress && progress.active) {
+            const decoding = progress.decoding || false;
+            setIsDecoding(decoding);
 
-          if (decoding || progress.steps > 0) {
-            hasRealGenerationStepRef.current = true;
-            setCurrentStep(step);
-          }
-          if (!decoding) {
-            setGenerationSpeed(speed);
+            const step = decoding ? (progress.steps || constraints.steps || 20) : (progress.step || 0);
+            const steps = progress.steps || constraints.steps || 20;
+            const speed = decoding ? "" : (progress.speed || "");
+            const numericSpeed = parseFloat(speed);
+            const backendMode = String(progress.backendMode || "").toLowerCase();
+            const backendDevice = String(progress.backendDevice || "").toLowerCase();
+            const isConfirmedGpuBackend = (
+              backendMode.includes("gpu") ||
+              backendMode.includes("vulkan") ||
+              backendMode.includes("cuda") ||
+              backendMode.includes("rocm") ||
+              backendMode.includes("metal") ||
+              backendDevice.includes("vulkan") ||
+              backendDevice.includes("cuda") ||
+              backendDevice.includes("rocm")
+            );
+
+            if (decoding || progress.steps > 0) {
+              hasRealGenerationStepRef.current = true;
+              setCurrentStep(step);
+            }
+            if (!decoding) {
+              setGenerationSpeed(speed);
+            } else {
+              setGenerationSpeed("decoding");
+            }
+
+            let progressPercent = 0;
+            if (decoding) {
+              progressPercent = 99;
+            } else if (steps > 0) {
+              progressPercent = Math.round((step / steps) * 100);
+            }
+            progressPercent = Math.min(99, progressPercent);
+            if (decoding || progress.steps > 0) {
+              setGenerationProgress(progressPercent);
+            } else {
+              setGenerationProgress((prev) => Math.max(prev, progressPercent));
+            }
+
+            let remaining = 0;
+            if (decoding) {
+              remaining = 3;
+            } else {
+              if (!isNaN(numericSpeed) && numericSpeed > 0) {
+                const remainingSteps = Math.max(0, steps - step);
+                if (speed.includes("it/s")) {
+                  remaining = remainingSteps / numericSpeed;
+                } else if (speed.includes("s/it")) {
+                  remaining = remainingSteps * numericSpeed;
+                }
+              } else {
+                const activeStepTime = gpuSelected ? baseGpuStepTime : baseCpuStepTime;
+                remaining = Math.max(0, (steps - step) * activeStepTime);
+              }
+            }
+
+            if (gpuSelected && !cpuFallbackDetected && !isConfirmedGpuBackend) {
+              const isSlowItS = speed.includes("it/s") && numericSpeed < 0.2;
+              const isSlowSIt = speed.includes("s/it") && numericSpeed > 5.0;
+              if (isSlowItS || isSlowSIt) {
+                cpuFallbackDetected = true;
+                setIsCpuFallback(true);
+              }
+            }
+
+            setEstimatedLeftTime(Math.round(remaining));
           } else {
-            setGenerationSpeed("decoding");
+            setGenerationProgress((prev) => Math.min(15, prev + 1));
+            setEstimatedLeftTime((prev) => Math.max(1, prev - 1));
+          }
+        } catch (e) {
+          console.warn("Failed to get generation progress, running simulation fallback:", e);
+
+          if (gpuSelected && !cpuFallbackDetected && elapsedSeconds > constraints.steps * baseGpuStepTime * 1.3) {
+            cpuFallbackDetected = true;
+            setIsCpuFallback(true);
+            activeStepTime = baseCpuStepTime;
+            fallbackTime = elapsedSeconds;
+            fallbackProgress = Math.min(95, Math.round((elapsedSeconds / (constraints.steps * baseGpuStepTime)) * 100));
           }
 
-          // Calculate progress percentage
+          let step = Math.min(constraints.steps - 1, Math.floor(elapsedSeconds / activeStepTime));
+          let expectedTotal = constraints.steps * activeStepTime;
+          if (elapsedSeconds >= expectedTotal) {
+            const computedStepTime = Math.ceil(elapsedSeconds / Math.max(0.5, step));
+            activeStepTime = Math.max(activeStepTime + 15, computedStepTime + 15);
+            expectedTotal = constraints.steps * activeStepTime;
+            step = Math.min(constraints.steps - 1, Math.floor(elapsedSeconds / activeStepTime));
+          }
+          const remaining = Math.max(1, expectedTotal - elapsedSeconds);
+          setEstimatedLeftTime(Math.round(remaining));
+
           let progressPercent = 0;
-          if (decoding) {
-            progressPercent = 99;
-          } else if (steps > 0) {
-            progressPercent = Math.round((step / steps) * 100);
-          }
-          progressPercent = Math.min(99, progressPercent);
-          if (decoding || progress.steps > 0) {
-            setGenerationProgress(progressPercent);
-          } else {
-            setGenerationProgress((prev) => Math.max(prev, progressPercent));
-          }
-
-          // Calculate remaining time
-          let remaining = 0;
-          if (decoding) {
-            remaining = 3;
-          } else {
-            if (!isNaN(numericSpeed) && numericSpeed > 0) {
-              const remainingSteps = Math.max(0, steps - step);
-              if (speed.includes("it/s")) {
-                remaining = remainingSteps / numericSpeed;
-              } else if (speed.includes("s/it")) {
-                remaining = remainingSteps * numericSpeed;
+          if (cpuFallbackDetected) {
+            const remainingProgress = 99 - fallbackProgress;
+            const remainingTime = expectedTotal - fallbackTime;
+            if (remainingTime > 0) {
+              const ratio = Math.min(1.0, (elapsedSeconds - fallbackTime) / remainingTime);
+              if (ratio < 0.85) {
+                progressPercent = Math.round(fallbackProgress + ratio * remainingProgress);
+              } else {
+                const x = (elapsedSeconds - (fallbackTime + remainingTime * 0.85)) / (activeStepTime * 2);
+                const decay = 1 - Math.exp(-x);
+                progressPercent = Math.min(99, Math.round(fallbackProgress + 0.85 * remainingProgress + (0.14 * remainingProgress) * decay));
               }
             } else {
-              const activeStepTime = gpuSelected ? baseGpuStepTime : baseCpuStepTime;
-              remaining = Math.max(0, (steps - step) * activeStepTime);
+              progressPercent = 99;
             }
-          }
-
-          // Detect CPU fallback / slow generation if GPU was requested but it runs slow
-          if (gpuSelected && !cpuFallbackDetected && !isConfirmedGpuBackend) {
-            const isSlowItS = speed.includes("it/s") && numericSpeed < 0.2;
-            const isSlowSIt = speed.includes("s/it") && numericSpeed > 5.0;
-            if (isSlowItS || isSlowSIt) {
-              cpuFallbackDetected = true;
-              setIsCpuFallback(true);
-            }
-          }
-
-          setEstimatedLeftTime(Math.round(remaining));
-        } else {
-          // Creep up slowly while loading the model/preparing
-          setGenerationProgress((prev) => Math.min(15, prev + 1));
-          setEstimatedLeftTime((prev) => Math.max(1, prev - 1));
-        }
-      } catch (e) {
-        console.warn("Failed to get generation progress, running simulation fallback:", e);
-
-        // Fallback simulation logic
-        if (gpuSelected && !cpuFallbackDetected && elapsedSeconds > constraints.steps * baseGpuStepTime * 1.3) {
-          cpuFallbackDetected = true;
-          setIsCpuFallback(true);
-          activeStepTime = baseCpuStepTime;
-          fallbackTime = elapsedSeconds;
-          fallbackProgress = Math.min(95, Math.round((elapsedSeconds / (constraints.steps * baseGpuStepTime)) * 100));
-        }
-
-        let step = Math.min(constraints.steps - 1, Math.floor(elapsedSeconds / activeStepTime));
-        let expectedTotal = constraints.steps * activeStepTime;
-        if (elapsedSeconds >= expectedTotal) {
-          const computedStepTime = Math.ceil(elapsedSeconds / Math.max(0.5, step));
-          activeStepTime = Math.max(activeStepTime + 15, computedStepTime + 15);
-          expectedTotal = constraints.steps * activeStepTime;
-          step = Math.min(constraints.steps - 1, Math.floor(elapsedSeconds / activeStepTime));
-        }
-        const remaining = Math.max(1, expectedTotal - elapsedSeconds);
-        setEstimatedLeftTime(Math.round(remaining));
-
-        let progressPercent = 0;
-        if (cpuFallbackDetected) {
-          const remainingProgress = 99 - fallbackProgress;
-          const remainingTime = expectedTotal - fallbackTime;
-          if (remainingTime > 0) {
-            const ratio = Math.min(1.0, (elapsedSeconds - fallbackTime) / remainingTime);
-            if (ratio < 0.85) {
-              progressPercent = Math.round(fallbackProgress + ratio * remainingProgress);
+          } else {
+            if (elapsedSeconds < expectedTotal * 0.85) {
+              progressPercent = Math.round((elapsedSeconds / expectedTotal) * 100);
             } else {
-              const x = (elapsedSeconds - (fallbackTime + remainingTime * 0.85)) / (activeStepTime * 2);
+              const x = (elapsedSeconds - expectedTotal * 0.85) / (activeStepTime * 2);
               const decay = 1 - Math.exp(-x);
-              progressPercent = Math.min(99, Math.round(fallbackProgress + 0.85 * remainingProgress + (0.14 * remainingProgress) * decay));
+              progressPercent = Math.min(99, Math.round(85 + 14 * decay));
             }
-          } else {
-            progressPercent = 99;
           }
-        } else {
-          if (elapsedSeconds < expectedTotal * 0.85) {
-            progressPercent = Math.round((elapsedSeconds / expectedTotal) * 100);
-          } else {
-            const x = (elapsedSeconds - expectedTotal * 0.85) / (activeStepTime * 2);
-            const decay = 1 - Math.exp(-x);
-            progressPercent = Math.min(99, Math.round(85 + 14 * decay));
+          if (!hasRealGenerationStepRef.current) {
+            setGenerationProgress((p) => Math.max(p, progressPercent));
           }
         }
-        if (!hasRealGenerationStepRef.current) {
-          setGenerationProgress((p) => Math.max(p, progressPercent));
-        }
-      }
-    }, 1000);
+      }, 1000);
 
-    try {
-      abortControllerRef.current = new AbortController();
-      const result = await generateImage(
-        prompt,
-        negativePrompt,
-        constraints,
-        activeModel,
-        baseImage,
-        (prog) => setGenerationProgress((prev) => Math.max(prev, prog)),
-        abortControllerRef.current.signal
-      );
-
-      if (timerRef.current) clearInterval(timerRef.current);
-      setGenerationProgress(100);
-      setCurrentStep(constraints.steps);
-      setEstimatedLeftTime(0);
-      setGenerationSpeed("");
-
-      const metadata = {
-        prompt: prompt,
-        negativePrompt: negativePrompt,
-        seed: result.seed,
-        steps: constraints.steps,
-        cfgScale: constraints.cfgScale,
-        width: constraints.width,
-        height: constraints.height,
-        sampler: constraints.sampler,
-        model: activeModel,
-        mode: baseImage ? "img2img" : "txt2img",
-        denoisingStrength: baseImage ? constraints.denoisingStrength : null,
-        duration_sec: result.duration_sec,
-        timestamp: new Date().toLocaleTimeString(),
-      };
-      let savedOutput = null;
-      let savedUrl = null;
       try {
-        savedOutput = await saveGeneratedOutput(result.image, metadata);
-        savedUrl = savedOutput.url;
-        if (!savedUrl) {
-          throw new Error("The local server saved the image but did not return a file URL.");
+        abortControllerRef.current = new AbortController();
+        const styleObj = STYLE_FILTERS.find(s => s.id === selectedStyle);
+        const styleSuffix = styleObj ? styleObj.suffix : "";
+        const finalPrompt = prompt + styleSuffix;
+
+        const currentSeed = (i > 0 && constraints.seed !== -1) ? (constraints.seed + i) : constraints.seed;
+        const currentConstraints = {
+          ...constraints,
+          seed: currentSeed
+        };
+
+        const result = await generateImage(
+          finalPrompt,
+          negativePrompt,
+          currentConstraints,
+          activeModel,
+          baseImage,
+          (prog) => setGenerationProgress((prev) => Math.max(prev, prog)),
+          abortControllerRef.current.signal
+        );
+
+        if (timerRef.current) clearInterval(timerRef.current);
+        setGenerationProgress(100);
+        setCurrentStep(constraints.steps);
+        setEstimatedLeftTime(0);
+        setGenerationSpeed("");
+
+        const metadata = {
+          prompt: prompt,
+          style: selectedStyle,
+          negativePrompt: negativePrompt,
+          seed: result.seed,
+          steps: constraints.steps,
+          cfgScale: constraints.cfgScale,
+          width: constraints.width,
+          height: constraints.height,
+          sampler: constraints.sampler,
+          model: activeModel,
+          mode: baseImage ? "img2img" : "txt2img",
+          denoisingStrength: baseImage ? constraints.denoisingStrength : null,
+          duration_sec: result.duration_sec,
+          timestamp: new Date().toLocaleTimeString(),
+        };
+
+        let savedOutput = null;
+        let savedUrl = null;
+        try {
+          savedOutput = await saveGeneratedOutput(result.image, metadata);
+          savedUrl = savedOutput.url;
+          if (!savedUrl) {
+            throw new Error("The local server saved the image but did not return a file URL.");
+          }
+        } catch (saveErr) {
+          console.error("Generated image could not be saved:", saveErr);
+          throw new Error(`Image generated but could not be saved to USB: ${saveErr.message || saveErr}`);
         }
-      } catch (saveErr) {
-        console.error("Generated image could not be saved:", saveErr);
-        throw new Error(`Image generated but could not be saved to USB: ${saveErr.message || saveErr}`);
+
+        setOutputImage(savedUrl);
+        setOutputSeed(result.seed);
+        setGenDuration(result.duration_sec);
+
+        const historyItem = {
+          ...metadata,
+          ...(savedOutput || {}),
+          url: savedUrl,
+        };
+
+        setGeneratedImages((prev) => [historyItem, ...prev]);
+      } catch (e) {
+        if (e.name === "AbortError") {
+          console.log("Generation request was aborted by the user");
+          if (timerRef.current) clearInterval(timerRef.current);
+          break;
+        } else {
+          console.error("Generation failed:", e);
+          setErrorMsg(e.message || "Generation failed. Please try again.");
+          if (timerRef.current) clearInterval(timerRef.current);
+          break;
+        }
       }
-
-      setOutputImage(savedUrl);
-      setOutputSeed(result.seed);
-      setGenDuration(result.duration_sec);
-
-      const historyItem = {
-        ...metadata,
-        ...(savedOutput || {}),
-        url: savedUrl,
-      };
-
-      setGeneratedImages((prev) => [historyItem, ...prev]);
-    } catch (e) {
-      if (e.name === "AbortError") {
-        console.log("Generation request was aborted by the user");
-      } else {
-        console.error("Generation failed:", e);
-        setErrorMsg(e.message || "Generation failed. Please try again.");
-      }
-      if (timerRef.current) clearInterval(timerRef.current);
-    } finally {
-      setIsGenerating(false);
-      abortControllerRef.current = null;
     }
+
+    setIsGenerating(false);
+    abortControllerRef.current = null;
   };
 
   // Stop/Cancel Generation Handler
@@ -705,6 +757,95 @@ function Generator({
                 />
               </div>
 
+              {/* Aspect Ratio Selection */}
+              <div className="m3-text-field">
+                <label className="m3-text-field-label">Aspect Ratio</label>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "8px" }}>
+                  {[
+                    { ratio: "1:1", label: "Square (1:1)" },
+                    { ratio: "16:9", label: "Landscape (16:9)" },
+                    { ratio: "9:16", label: "Portrait (9:16)" },
+                    { ratio: "21:9", label: "Cinematic (21:9)" }
+                  ].map((item) => (
+                    <button
+                      key={item.ratio}
+                      type="button"
+                      className={`m3-btn ${aspectRatio === item.ratio ? "m3-btn-filled" : "m3-btn-outlined"}`}
+                      style={{ height: "34px", padding: "0 12px", fontSize: "0.8rem", borderRadius: "8px", cursor: "pointer" }}
+                      onClick={() => applyAspectRatio(item.ratio, useHighRes)}
+                      disabled={isGenerating}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.78rem" }}>
+                  <input
+                    type="checkbox"
+                    id="highResToggle"
+                    checked={useHighRes}
+                    onChange={(e) => {
+                      setUseHighRes(e.target.checked);
+                      applyAspectRatio(aspectRatio, e.target.checked);
+                    }}
+                    disabled={isGenerating}
+                    style={{ cursor: "pointer" }}
+                  />
+                  <label htmlFor="highResToggle" style={{ cursor: "pointer", fontWeight: 500, color: "var(--md-sys-color-on-surface)" }}>
+                    High-Resolution (1024px base for FLUX/SDXL)
+                  </label>
+                </div>
+              </div>
+
+              {/* Preset Style Filters */}
+              <div className="m3-text-field">
+                <label className="m3-text-field-label">Style Filter</label>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
+                  {STYLE_FILTERS.map((style) => (
+                    <button
+                      key={style.id}
+                      type="button"
+                      className={`m3-btn ${selectedStyle === style.id ? "m3-btn-filled" : "m3-btn-outlined"}`}
+                      style={{
+                        height: "36px",
+                        padding: "0 8px",
+                        fontSize: "0.78rem",
+                        borderRadius: "8px",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        cursor: "pointer"
+                      }}
+                      onClick={() => setSelectedStyle(style.id)}
+                      disabled={isGenerating}
+                      title={style.name}
+                    >
+                      {style.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Batch Count */}
+              <div className="m3-text-field">
+                <label className="m3-text-field-label">Batch Size (Sequential)</label>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <input
+                    type="range"
+                    min="1"
+                    max="4"
+                    step="1"
+                    value={batchCount}
+                    onChange={(e) => setBatchCount(parseInt(e.target.value))}
+                    disabled={isGenerating}
+                    style={{ flex: 1, cursor: "pointer" }}
+                  />
+                  <span style={{ fontWeight: 700, fontSize: "0.85rem", width: "70px", textAlign: "right" }}>
+                    {batchCount} {batchCount === 1 ? "image" : "images"}
+                  </span>
+                </div>
+              </div>
+
               {constraints.backendType !== "apple-npu" && constraints.backendType !== "openvino-npu" && (
                 <div className="m3-text-field">
                   <label className="m3-text-field-label">Base Image (Optional)</label>
@@ -855,7 +996,7 @@ function Generator({
                   <>
                     <div className="progress-spinner"></div>
                     <div className="progress-text" style={{ fontSize: "1.1rem", fontWeight: 700 }}>
-                      {isDecoding ? "Decoding Latents..." : "Generating Locally..."}
+                      {batchCount > 1 ? `Generating Image ${currentBatchIndex + 1} of ${batchCount}...` : (isDecoding ? "Decoding Latents..." : "Generating Locally...")}
                     </div>
                     
                     {isCpuFallback && (

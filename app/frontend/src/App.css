@@ -3838,3 +3838,51 @@ html[data-theme^="dark"] .settings-subsection:hover {
   animation: fadeInSlide 0.3s var(--md-transition-easing);
 }
 
+/* Premium Visual Redesign & Micro-animations */
+.text-engine-badge.ready {
+  position: relative;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--md-sys-color-success) 20%, transparent);
+  animation: status-pulsate-badge 2s infinite ease-in-out;
+}
+
+@keyframes status-pulsate-badge {
+  0%, 100% {
+    box-shadow: 0 0 4px color-mix(in srgb, var(--md-sys-color-success) 12%, transparent);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 12px color-mix(in srgb, var(--md-sys-color-success) 35%, transparent);
+    transform: scale(1.01);
+  }
+}
+
+.sidebar-history-item {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.sidebar-history-item:hover {
+  background: var(--md-sys-color-surface-variant) !important;
+  transform: translateX(3px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.nav-item {
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.nav-item:hover {
+  transform: translateX(3px) scale(1.01);
+  background-color: var(--md-sys-color-surface-variant);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.m3-card {
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease !important;
+}
+
+.m3-card:hover {
+  border-color: color-mix(in srgb, var(--md-sys-color-primary) 30%, var(--border-color)) !important;
+  box-shadow: 0 12px 36px 0 rgba(0, 0, 0, 0.08);
+}
+
+

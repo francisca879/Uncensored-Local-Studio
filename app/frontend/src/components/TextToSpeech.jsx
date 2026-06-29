@@ -34,10 +34,14 @@ function downloadUrl(url, filename) {
 
 export default function TextToSpeech({
   showAlert,
+  showConfirm,
   selectedOutput,
   onOutputsChanged,
   ttsSettings,
   setTtsSettings,
+  ttsOutputs = [],
+  onDeleteTtsOutput,
+  setSelectedTtsOutput,
 }) {
   const [status, setStatus] = useState({ ready: false, running: false, runtimeInstalled: false, settings: {}, voices: [] });
   const [models, setModels] = useState([]);
@@ -193,29 +197,54 @@ export default function TextToSpeech({
             </select>
           </label>
 
-          <div className="speech-controls-row">
-            <label className="speech-label">
-              Voice
-              <select className="m3-input" value={selectedVoice} onChange={(event) => updateTtsSetting("voice", event.target.value)}>
-                {voices.map((voice) => (
-                  <option key={voice.id} value={voice.id}>
-                    {voice.name} ({voice.gender}, {voice.language})
-                  </option>
+          <div className="speech-controls-row" style={{ display: "flex", flexDirection: "column", gap: "12px", width: "100%" }}>
+            <div style={{ display: "flex", gap: "16px", width: "100%" }}>
+              <label className="speech-label" style={{ flex: 1 }}>
+                Voice
+                <select className="m3-input" style={{ width: "100%" }} value={selectedVoice} onChange={(event) => updateTtsSetting("voice", event.target.value)}>
+                  {voices.map((voice) => (
+                    <option key={voice.id} value={voice.id}>
+                      {voice.name} ({voice.gender}, {voice.language})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              
+              <label className="speech-label" style={{ flex: 1 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
+                  <span>Speed</span>
+                  <span style={{ fontWeight: 700 }}>{speed}x</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2.0"
+                  step="0.05"
+                  value={speed}
+                  onChange={(event) => updateTtsSetting("speed", Math.max(0.5, Math.min(2, Number(event.target.value) || 1)))}
+                  style={{ width: "100%", marginTop: "8px", cursor: "pointer" }}
+                  disabled={isGenerating}
+                />
+              </label>
+            </div>
+
+            <div style={{ marginTop: "4px" }}>
+              <span style={{ fontSize: "0.76rem", fontWeight: 600, color: "var(--md-sys-color-outline)", display: "block", marginBottom: "6px" }}>Voice Shortcuts</span>
+              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                {FALLBACK_VOICES.map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    className={`m3-btn ${selectedVoice === v.id ? "m3-btn-filled" : "m3-btn-outlined"}`}
+                    style={{ height: "30px", padding: "0 10px", fontSize: "0.75rem", borderRadius: "6px", cursor: "pointer" }}
+                    onClick={() => updateTtsSetting("voice", v.id)}
+                    disabled={isGenerating}
+                  >
+                    {v.name} ({v.gender === "Female" ? "♀️" : "♂️"})
+                  </button>
                 ))}
-              </select>
-            </label>
-            <label className="speech-label">
-              Speed
-              <input
-                className="m3-input"
-                type="number"
-                min="0.5"
-                max="2"
-                step="0.05"
-                value={speed}
-                onChange={(event) => updateTtsSetting("speed", Math.max(0.5, Math.min(2, Number(event.target.value) || 1)))}
-              />
-            </label>
+              </div>
+            </div>
           </div>
 
           <div className="speech-button-row">
@@ -281,37 +310,110 @@ export default function TextToSpeech({
         </section>
       </div>
 
-      <section className="m3-card speech-result-panel">
-        <div className="speech-panel-header">
-          <h3>Output</h3>
-          <div className="speech-button-row">
-            <button className="m3-btn m3-btn-outlined" onClick={() => output?.url && downloadUrl(output.url, output.audioFile || "tts.wav")} disabled={!output?.url}>
-              <Save size={14} />
-              <span>WAV</span>
-            </button>
-          </div>
-        </div>
-        {output?.url ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-            <audio controls src={output.url} style={{ width: "100%" }} />
-            <div className="text-progress">
-              {output.voiceName || output.voice} &bull; {output.modelName || output.model} &bull; {new Date(output.createdAt).toLocaleString()}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginTop: "16px" }}>
+        {/* Left Side: Current Output */}
+        <section className="m3-card speech-result-panel" style={{ margin: 0 }}>
+          <div className="speech-panel-header">
+            <h3>Output</h3>
+            <div className="speech-button-row">
+              <button className="m3-btn m3-btn-outlined" onClick={() => output?.url && downloadUrl(output.url, output.audioFile || "tts.wav")} disabled={!output?.url}>
+                <Save size={14} />
+                <span>WAV</span>
+              </button>
             </div>
-            <textarea
-              className="m3-input"
-              value={output.text || text}
-              onChange={(event) => setOutput((prev) => ({ ...(prev || {}), text: event.target.value }))}
-              rows={5}
-              style={{ width: "100%", resize: "vertical", minHeight: "120px", lineHeight: 1.45 }}
-            />
           </div>
-        ) : (
-          <div className="empty-state" style={{ padding: "32px 0" }}>
-            <Volume2 size={42} />
-            <p>Generated speech will appear here.</p>
+          {output?.url ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <audio controls src={output.url} style={{ width: "100%" }} />
+              <div className="text-progress">
+                {output.voiceName || output.voice} &bull; {output.modelName || output.model} &bull; {new Date(output.createdAt).toLocaleString()}
+              </div>
+              <textarea
+                className="m3-input"
+                value={output.text || text}
+                onChange={(event) => setOutput((prev) => ({ ...(prev || {}), text: event.target.value }))}
+                rows={5}
+                style={{ width: "100%", resize: "vertical", minHeight: "120px", lineHeight: 1.45 }}
+              />
+            </div>
+          ) : (
+            <div className="empty-state" style={{ padding: "32px 0" }}>
+              <Volume2 size={42} />
+              <p>Generated speech will appear here.</p>
+            </div>
+          )}
+        </section>
+
+        {/* Right Side: Audio History List */}
+        <section className="m3-card speech-result-panel" style={{ margin: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div className="speech-panel-header">
+            <h3>Audio History</h3>
+            <span className="status-chip">{ttsOutputs.length} files</span>
           </div>
-        )}
-      </section>
+          
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto", maxHeight: "260px", paddingRight: "4px" }}>
+            {ttsOutputs.length === 0 ? (
+              <div style={{ padding: "32px 0", textAlign: "center", color: "var(--md-sys-color-outline)", fontSize: "0.85rem" }}>
+                No previous recordings found.
+              </div>
+            ) : (
+              ttsOutputs.map((item) => {
+                const itemId = item.filename || item.metadata || item.audioFile;
+                const isActive = output && (output.filename || output.metadata || output.audioFile) === itemId;
+                return (
+                  <div
+                    key={itemId}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      background: isActive ? "var(--md-sys-color-primary-container)" : "var(--md-sys-color-surface-variant)",
+                      border: isActive ? "1px solid var(--md-sys-color-primary)" : "1px solid var(--border-color)",
+                      cursor: "pointer",
+                      fontSize: "0.8rem",
+                      transition: "background 0.2s"
+                    }}
+                    onClick={() => {
+                      setOutput(item);
+                      setText(item.text || "");
+                      setSelectedTtsOutput?.(item);
+                    }}
+                  >
+                    <div style={{ display: "flex", flexDirection: "column", gap: "2px", flex: 1, minWidth: 0 }}>
+                       <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: isActive ? "var(--md-sys-color-on-primary-container)" : "inherit" }}>
+                         {item.text || item.displayName || "TTS Recording"}
+                       </span>
+                       <span style={{ fontSize: "0.7rem", opacity: 0.8 }}>
+                         Voice: {item.voiceName || item.voice || "Unknown"} &bull; {new Date(item.createdAt || item.modifiedAt).toLocaleDateString()}
+                       </span>
+                    </div>
+                    <div style={{ display: "flex", gap: "4px", flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                      <button
+                        className="m3-btn m3-btn-outlined"
+                        style={{ height: "26px", width: "26px", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", cursor: "pointer" }}
+                        onClick={() => downloadUrl(item.url, item.audioFile || "tts.wav")}
+                        title="Download"
+                      >
+                        ⬇️
+                      </button>
+                      <button
+                        className="m3-btn m3-btn-error"
+                        style={{ height: "26px", width: "26px", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", cursor: "pointer" }}
+                        onClick={(e) => onDeleteTtsOutput?.(item, e)}
+                        title="Delete"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

@@ -215,6 +215,74 @@ function App() {
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [showHistory, setShowHistory] = useState(false); // Default hide
+
+  // Folders State
+  const [folders, setFolders] = useState(() => {
+    try {
+      const saved = localStorage.getItem("chat_folders");
+      return saved ? JSON.parse(saved) : [];
+    } catch (_) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("chat_folders", JSON.stringify(folders));
+  }, [folders]);
+
+  const addFolder = useCallback((name) => {
+    const newFolder = {
+      id: "folder_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
+      name: name || "New Folder",
+      expanded: true
+    };
+    setFolders((prev) => [...prev, newFolder]);
+    return newFolder.id;
+  }, []);
+
+  const deleteFolder = useCallback((folderId) => {
+    setFolders((prev) => prev.filter((f) => f.id !== folderId));
+    // Remove folderId from all conversations associated with it
+    setConversations((prev) => {
+      return prev.map((conv) => {
+        if (conv.folderId === folderId) {
+          const updated = { ...conv, folderId: null };
+          persistConversation(updated);
+          return updated;
+        }
+        return conv;
+      });
+    });
+  }, []);
+
+  const renameFolder = useCallback((folderId, newName) => {
+    setFolders((prev) =>
+      prev.map((f) => (f.id === folderId ? { ...f, name: newName } : f))
+    );
+  }, []);
+
+  const toggleFolderCollapse = useCallback((folderId) => {
+    setFolders((prev) =>
+      prev.map((f) => (f.id === folderId ? { ...f, expanded: !f.expanded } : f))
+    );
+  }, []);
+
+  const setConversationFolder = useCallback((conversationId, folderId) => {
+    setConversations((prev) => {
+      const list = [...prev];
+      const idx = list.findIndex((c) => c.id === conversationId);
+      if (idx !== -1) {
+        const conversation = {
+          ...list[idx],
+          folderId: folderId || null
+        };
+        list[idx] = conversation;
+        persistConversation(conversation);
+      }
+      return list;
+    });
+  }, []);
+
   const [sidebarVisible, setSidebarVisible] = useState(() => {
     const saved = localStorage.getItem("sidebarVisible");
     return saved !== "false";
@@ -689,6 +757,12 @@ function App() {
       showHistory={showHistory}
       setShowHistory={setShowHistory}
       onDeleteConversation={handleDeleteConversation}
+      folders={folders}
+      addFolder={addFolder}
+      deleteFolder={deleteFolder}
+      renameFolder={renameFolder}
+      toggleFolderCollapse={toggleFolderCollapse}
+      setConversationFolder={setConversationFolder}
       speechTranscriptions={speechTranscriptions}
       selectedSpeechTranscript={selectedSpeechTranscript}
       setSelectedSpeechTranscript={setSelectedSpeechTranscript}
@@ -702,7 +776,7 @@ function App() {
       setShowTtsHistory={setShowTtsHistory}
       onDeleteTtsOutput={handleDeleteTtsOutput}
     />
-  ), [sidebarVisible, activeTab, specs, conversations, activeConversationId, showHistory, handleDeleteConversation, speechTranscriptions, selectedSpeechTranscript, showSpeechHistory, handleDeleteSpeechTranscription, ttsOutputs, selectedTtsOutput, showTtsHistory, handleDeleteTtsOutput]);
+  ), [sidebarVisible, activeTab, specs, conversations, activeConversationId, showHistory, handleDeleteConversation, folders, addFolder, deleteFolder, renameFolder, toggleFolderCollapse, setConversationFolder, speechTranscriptions, selectedSpeechTranscript, showSpeechHistory, handleDeleteSpeechTranscription, ttsOutputs, selectedTtsOutput, showTtsHistory, handleDeleteTtsOutput]);
 
   const handleStopServer = useCallback(async () => {
     if (!serverRunning || isStoppingServer) return;
@@ -821,6 +895,9 @@ function App() {
             onOutputsChanged={refreshTtsOutputs}
             ttsSettings={ttsSettings}
             setTtsSettings={setTtsSettings}
+            ttsOutputs={ttsOutputs}
+            onDeleteTtsOutput={handleDeleteTtsOutput}
+            setSelectedTtsOutput={setSelectedTtsOutput}
           />
         </div>
 
