@@ -307,7 +307,7 @@ if [[ "$PLATFORM" == "Linux" ]]; then
   fi
 fi
 
-TOTAL_STEPS=7
+TOTAL_STEPS=8
 
 # ── Step 1: Portable Node.js ────────────────────────────────────────────────
 print_step 1 $TOTAL_STEPS "Setting up portable Node.js ($NODE_DIR/)"
@@ -713,6 +713,23 @@ else
   else
     print_fail "Frontend build failed."
     exit 1
+  fi
+fi
+
+# ── Pre-loading Default LLM Model ──────────────────────────────────────────
+MODEL_FILE="$ROOT_DIR/app/models/Dolphin3.0-Qwen2.5-1.5B-Q4_K_M.gguf"
+mkdir -p "$ROOT_DIR/app/models"
+if [[ ! -f "$MODEL_FILE" ]]; then
+  print_step 8 $TOTAL_STEPS "Pre-loading default model: Dolphin 3.0 Qwen 2.5 1.5B GGUF..."
+  if command -v curl >/dev/null 2>&1; then
+    curl -L -o "$MODEL_FILE" "https://huggingface.co/bartowski/Dolphin3.0-Qwen2.5-1.5B-GGUF/resolve/main/Dolphin3.0-Qwen2.5-1.5B-Q4_K_M.gguf" || true
+  elif command -v wget >/dev/null 2>&1; then
+    wget -O "$MODEL_FILE" "https://huggingface.co/bartowski/Dolphin3.0-Qwen2.5-1.5B-GGUF/resolve/main/Dolphin3.0-Qwen2.5-1.5B-Q4_K_M.gguf" || true
+  fi
+  if [[ -f "$MODEL_FILE" ]]; then
+    print_ok "Dolphin 3.0 model downloaded successfully and pre-loaded!"
+  else
+    print_warn "Could not pre-download Dolphin 3.0 model (network error). You can still import or download models inside the application."
   fi
 fi
 
