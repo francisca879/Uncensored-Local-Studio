@@ -1,2 +1,5 @@
 [phases.setup]
-nixPkgs = ["...", "unzip", "python3"]
+nixPkgs = ["...", "unzip", "python3", "nodejs_22"]
+
+[providers.node]
+nodeVersion = "22"
