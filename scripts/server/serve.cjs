@@ -1508,6 +1508,14 @@ function getHardwareSpecs() {
   if (tier === "high") {
     recommended_models = [
       {
+        name: "Dolphin 3.0 (Qwen 2.5 1.5B) - Uncensored",
+        filename: "Dolphin3.0-Qwen2.5-1.5B-Q4_K_M.gguf",
+        approxSize: "940 MB",
+        url: "https://huggingface.co/bartowski/Dolphin3.0-Qwen2.5-1.5B-GGUF/resolve/main/Dolphin3.0-Qwen2.5-1.5B-Q4_K_M.gguf",
+        notes: "Pre-loaded, highly capable, fully uncensored assistant.",
+        reason: "Pre-loaded Cloud Model"
+      },
+      {
         name: "Llama 3 8B Instruct (Q8_0)",
         filename: "Meta-Llama-3-8B-Instruct-Q8_0.gguf",
         approxSize: "8.5 GB",
@@ -1527,6 +1535,14 @@ function getHardwareSpecs() {
   } else if (tier === "mid") {
     recommended_models = [
       {
+        name: "Dolphin 3.0 (Qwen 2.5 1.5B) - Uncensored",
+        filename: "Dolphin3.0-Qwen2.5-1.5B-Q4_K_M.gguf",
+        approxSize: "940 MB",
+        url: "https://huggingface.co/bartowski/Dolphin3.0-Qwen2.5-1.5B-GGUF/resolve/main/Dolphin3.0-Qwen2.5-1.5B-Q4_K_M.gguf",
+        notes: "Pre-loaded, highly capable, fully uncensored assistant.",
+        reason: "Pre-loaded Cloud Model"
+      },
+      {
         name: "Llama 3 8B Instruct (Q4_K_M)",
         filename: "Meta-Llama-3-8B-Instruct-Q4_K_M.gguf",
         approxSize: "4.8 GB",
@@ -1545,6 +1561,14 @@ function getHardwareSpecs() {
     ];
   } else {
     recommended_models = [
+      {
+        name: "Dolphin 3.0 (Qwen 2.5 1.5B) - Uncensored",
+        filename: "Dolphin3.0-Qwen2.5-1.5B-Q4_K_M.gguf",
+        approxSize: "940 MB",
+        url: "https://huggingface.co/bartowski/Dolphin3.0-Qwen2.5-1.5B-GGUF/resolve/main/Dolphin3.0-Qwen2.5-1.5B-Q4_K_M.gguf",
+        notes: "Pre-loaded, highly capable, fully uncensored assistant.",
+        reason: "Pre-loaded Cloud Model"
+      },
       {
         name: "Qwen 2.5 Coder 0.5B Instruct (Q4_K_M)",
         filename: "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
